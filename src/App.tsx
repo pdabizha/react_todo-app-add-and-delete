@@ -19,10 +19,12 @@ export const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
 
   const [isSavingAll, setIsSavingAll] = useState(false);
-  const [savingTodoId, setSavingTodoId] = useState<number | null>(null);
+  const [savingTodoIds, setSavingTodoIds] = useState<number[]>([]);
 
   const [newTodoTitle, setNewTodoTitle] = useState('');
   const [inputDisabled, setInputDisabled] = useState(false);
+
+  const [tempTodo, setTempTodo] = useState<Todo | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -36,8 +38,7 @@ export const App: React.FC = () => {
         );
         setItemsLeft(data.filter(todo => !todo.completed).length);
       })
-      .catch(() => setErrorMessage('Unable to load todos'))
-      .finally();
+      .catch(() => setErrorMessage('Unable to load todos'));
   }
 
   useEffect(() => loadTodos(), []);
@@ -46,14 +47,14 @@ export const App: React.FC = () => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, [todosFromServer]);
+  }, [todosFromServer, inputDisabled]);
 
   const updateTodo = async (todo: Todo) => {
-    if (isSavingAll || savingTodoId !== null) {
+    if (isSavingAll || savingTodoIds.length > 0) {
       return;
     }
 
-    setSavingTodoId(todo.id);
+    setSavingTodoIds([todo.id]);
 
     try {
       await todoServise.updateTodo(todo);
@@ -61,12 +62,18 @@ export const App: React.FC = () => {
     } catch (error) {
       setErrorMessage('Unable to update todo');
     } finally {
-      setSavingTodoId(null);
+      setSavingTodoIds([]);
     }
   };
 
+  useEffect(() => {
+    setCompletedTodosId(
+      todosFromServer.filter(todo => todo.completed).map(todo => todo.id),
+    );
+  }, [todosFromServer]);
+
   const saveAllTodos = async () => {
-    if (isSavingAll || savingTodoId !== null) {
+    if (isSavingAll || savingTodoIds.length > 0) {
       return;
     }
 
@@ -81,17 +88,17 @@ export const App: React.FC = () => {
       await Promise.all(updatedTodos.map(todo => todoServise.updateTodo(todo)));
       loadTodos();
     } catch (error) {
-      setErrorMessage('Unable to delete a todo');
+      setErrorMessage('Unable to update a todo');
     } finally {
       setIsSavingAll(false);
     }
   };
 
   const deleteTodo = async (todoId: number) => {
-    setSavingTodoId(todoId);
+    setSavingTodoIds([todoId]);
 
     try {
-      await todoServise.deleteTodod(todoId);
+      await todoServise.deleteTodo(todoId);
       setTodosFromServer(currentTodos =>
         currentTodos.filter(todo => todo.id !== todoId),
       );
@@ -99,43 +106,38 @@ export const App: React.FC = () => {
     } catch (error) {
       setErrorMessage('Unable to delete a todo');
     } finally {
-      setSavingTodoId(null);
+      setSavingTodoIds([]);
     }
   };
 
-  const addTodo = async ({ id, userId, title, completed }: Todo) => {
-    setSavingTodoId(id);
+  const addTodo = async (title: string) => {
     setInputDisabled(true);
 
-    setTodosFromServer(currentTodos => [
-      ...currentTodos,
-      { id, userId, title, completed },
-    ]);
+    const newTempTodo: Todo = {
+      id: 0,
+      userId: todoServise.USER_ID,
+      title,
+      completed: false,
+    };
+
+    setTempTodo(newTempTodo);
 
     try {
+      const { userId, completed } = newTempTodo;
+
       const newTodoFromServer = await todoServise.createTodo({
         userId,
         title,
         completed,
       });
 
-      setTodosFromServer(currentTodos =>
-        currentTodos.map(todo =>
-          todo.id === id ? { ...todo, id: newTodoFromServer.id } : todo,
-        ),
-      );
-
+      setTodosFromServer(currentTodos => [...currentTodos, newTodoFromServer]);
       setItemsLeft(prev => prev + 1);
-
       setNewTodoTitle('');
-      setSavingTodoId(null);
     } catch (error) {
-      setErrorMessage('Unable to add todo');
-      setTodosFromServer(currentTodos =>
-        currentTodos.filter(todo => todo.id !== id),
-      );
-      setSavingTodoId(null);
+      setErrorMessage('Unable to add a todo');
     } finally {
+      setTempTodo(null);
       setInputDisabled(false);
     }
   };
@@ -154,30 +156,73 @@ export const App: React.FC = () => {
     });
   }, [todosFromServer, completedTodosId, option]);
 
-  const itemLeft = todosFromServer.length - completedTodosId.length;
-
   const handleNewTodoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setNewTodoTitle(event.target.value);
   };
 
+  // const handleSubmit = (event: React.FormEvent) => {
+  //   event.preventDefault();
+  //   setErrorMessage('');
+  //   if (!newTodoTitle.trim()) {
+  //     setErrorMessage('Title should not be empty');
+
+  //     return;
+  //   }
+
+  //   const tempId = Date.now();
+
+  //   const newTodo: Todo = {
+  //     id: tempId,
+  //     userId: todoServise.USER_ID,
+  //     title: newTodoTitle.trim(),
+  //     completed: false,
+  //   };
+
+  //   addTodo(newTodo);
+  // };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+    setErrorMessage('');
+
     if (!newTodoTitle.trim()) {
       setErrorMessage('Title should not be empty');
 
       return;
     }
 
-    const tempId = Date.now();
+    addTodo(newTodoTitle.trim()); // передаём только title
+  };
 
-    const newTodo: Todo = {
-      id: tempId,
-      userId: todoServise.USER_ID,
-      title: newTodoTitle.trim(),
-      completed: false,
-    };
+  const handleClearCompleted = async () => {
+    setErrorMessage('');
+    setSavingTodoIds([...completedTodosId]);
 
-    addTodo(newTodo);
+    try {
+      const results = await Promise.allSettled(
+        completedTodosId.map(id => todoServise.deleteTodo(id)),
+      );
+
+      const successfulTodoIds = results
+        .map((result, index) =>
+          result.status === 'fulfilled' ? completedTodosId[index] : null,
+        )
+        .filter((id): id is number => id !== null);
+
+      setTodosFromServer(currentTodos =>
+        currentTodos.filter(todo => !successfulTodoIds.includes(todo.id)),
+      );
+
+      const hasError = results.some(result => result.status === 'rejected');
+
+      if (hasError) {
+        setErrorMessage('Unable to delete a todo');
+      }
+    } catch (error) {
+      setErrorMessage('Unable to delete a todo');
+    } finally {
+      setSavingTodoIds([]);
+    }
   };
 
   return (
@@ -188,7 +233,7 @@ export const App: React.FC = () => {
         <header className="todoapp__header">
           <button
             type="button"
-            className={cn('todoapp__toggle-all', { active: itemLeft === 0 })}
+            className={cn('todoapp__toggle-all', { active: itemsLeft === 0 })}
             data-cy="ToggleAllButton"
             onClick={saveAllTodos}
           />
@@ -211,9 +256,27 @@ export const App: React.FC = () => {
           listOfTodos={filteredTodos}
           onUpdate={updateTodo}
           isSavingAll={isSavingAll}
-          savingTodoId={savingTodoId}
           onDelete={deleteTodo}
+          savingTodoIds={savingTodoIds}
         />
+        {tempTodo && (
+          <div data-cy="Todo" className="todo">
+            <label className="todo__status-label">
+              <input
+                data-cy="TodoStatus"
+                type="checkbox"
+                className="todo__status"
+              />
+            </label>{' '}
+            <span data-cy="TodoTitle" className="todo__title">
+              {newTodoTitle}
+            </span>
+            <div data-cy="TodoLoader" className="modal overlay is-active">
+              <div className="modal-background has-background-white-ter" />
+              <div className="loader" />
+            </div>
+          </div>
+        )}
 
         {todosFromServer.length > 0 && (
           <footer className="todoapp__footer" data-cy="Footer">
@@ -228,6 +291,7 @@ export const App: React.FC = () => {
               className="todoapp__clear-completed"
               data-cy="ClearCompletedButton"
               disabled={completedTodosId.length < 1}
+              onClick={handleClearCompleted}
             >
               Clear completed
             </button>
@@ -235,10 +299,7 @@ export const App: React.FC = () => {
         )}
       </div>
 
-      <ErrorNotification
-        message={errorMessage}
-        onClose={() => setErrorMessage('')}
-      />
+      <ErrorNotification message={errorMessage} />
     </div>
   );
 };

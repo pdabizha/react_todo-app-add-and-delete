@@ -3,10 +3,9 @@ import cn from 'classnames';
 
 type Props = {
   message: string;
-  onClose: () => void;
 };
 
-export const ErrorNotification: React.FC<Props> = ({ message, onClose }) => {
+export const ErrorNotification: React.FC<Props> = ({ message }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -15,16 +14,14 @@ export const ErrorNotification: React.FC<Props> = ({ message, onClose }) => {
 
       const timer = setTimeout(() => {
         setIsVisible(false);
-        onClose();
       }, 3000);
 
       return () => clearTimeout(timer);
     }
-  }, [message, onClose]);
+  }, [message]);
 
   const handleErrorClose = () => {
     setIsVisible(false);
-    onClose();
   };
 
   return (

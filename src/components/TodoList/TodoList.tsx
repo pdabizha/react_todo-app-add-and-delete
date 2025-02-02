@@ -6,16 +6,16 @@ type Props = {
   listOfTodos: Todo[];
   onUpdate: (todo: Todo) => void;
   isSavingAll: boolean;
-  savingTodoId: number | null;
   onDelete: (todoId: number) => void;
+  savingTodoIds: number[];
 };
 
 export const TodoList: React.FC<Props> = ({
   listOfTodos,
   onUpdate,
   isSavingAll,
-  savingTodoId,
   onDelete,
+  savingTodoIds,
 }) => {
   const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
   const [value, setValue] = useState('');
@@ -61,73 +61,77 @@ export const TodoList: React.FC<Props> = ({
 
   return (
     <section className="todoapp__main" data-cy="TodoList">
-      {listOfTodos.map(todo => (
-        <div
-          key={todo.id}
-          data-cy="Todo"
-          className={cn('todo', { completed: todo.completed })}
-        >
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="todo__status-label">
-            <input
-              data-cy="TodoStatus"
-              type="checkbox"
-              className="todo__status"
-              checked={todo.completed}
-              onChange={() =>
-                handleTodoChange(
-                  { key: 'completed', val: !todo.completed },
-                  todo,
-                )
-              }
-            />
-          </label>
+      {listOfTodos.map(todo => {
+        const isSaving = savingTodoIds.includes(todo.id);
 
-          {editingTodoId === todo.id ? (
-            <form>
-              <input
-                data-cy="TodoTitleField"
-                type="text"
-                className="todo__title-field"
-                placeholder="Empty todo will be deleted"
-                value={value}
-                onChange={handleChange}
-                onKeyDown={event => handleKeyDown(event, todo)}
-                onBlur={handleBlur}
-                autoFocus
-              />
-            </form>
-          ) : (
-            <>
-              {' '}
-              <span
-                data-cy="TodoTitle"
-                className="todo__title"
-                onDoubleClick={() => handleTodoEdit(todo)}
-              >
-                {todo.title}
-              </span>
-              <button
-                type="button"
-                className="todo__remove"
-                data-cy="TodoDelete"
-                onClick={() => handleDelieteTodo(todo.id)}
-              >
-                ×
-              </button>
-            </>
-          )}
+        return (
           <div
-            data-cy="TodoLoader"
-            className={cn('modal overlay', {
-              'is-active': isSavingAll || savingTodoId === todo.id,
-            })}
+            key={todo.id}
+            data-cy="Todo"
+            className={cn('todo', { completed: todo.completed })}
           >
-            <div className="modal-background has-background-white-ter" />
-            <div className="loader" />
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+            <label className="todo__status-label">
+              <input
+                data-cy="TodoStatus"
+                type="checkbox"
+                className="todo__status"
+                checked={todo.completed}
+                onChange={() =>
+                  handleTodoChange(
+                    { key: 'completed', val: !todo.completed },
+                    todo,
+                  )
+                }
+              />
+            </label>
+
+            {editingTodoId === todo.id ? (
+              <form>
+                <input
+                  data-cy="TodoTitleField"
+                  type="text"
+                  className="todo__title-field"
+                  placeholder="Empty todo will be deleted"
+                  value={value}
+                  onChange={handleChange}
+                  onKeyDown={event => handleKeyDown(event, todo)}
+                  onBlur={handleBlur}
+                  autoFocus
+                />
+              </form>
+            ) : (
+              <>
+                {' '}
+                <span
+                  data-cy="TodoTitle"
+                  className="todo__title"
+                  onDoubleClick={() => handleTodoEdit(todo)}
+                >
+                  {todo.title}
+                </span>
+                <button
+                  type="button"
+                  className="todo__remove"
+                  data-cy="TodoDelete"
+                  onClick={() => handleDelieteTodo(todo.id)}
+                >
+                  ×
+                </button>
+              </>
+            )}
+            <div
+              data-cy="TodoLoader"
+              className={cn('modal overlay', {
+                'is-active': isSavingAll || isSaving,
+              })}
+            >
+              <div className="modal-background has-background-white-ter" />
+              <div className="loader" />
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </section>
   );
 };
