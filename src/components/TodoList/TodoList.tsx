@@ -46,6 +46,12 @@ export const TodoList: React.FC<Props> = ({
     todo: Todo,
   ) => {
     if (event.key === 'Enter') {
+      if (!value) {
+        onDelete(todo.id);
+
+        return;
+      }
+
       onUpdate({ ...todo, title: value });
       setEditingTodoId(null);
     }

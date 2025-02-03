@@ -1,17 +1,16 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import cn from 'classnames';
 import * as todoServise from './api/todos';
 import { Todo } from './types/Todo';
 import { TodoList } from './components/TodoList/TodoList';
 import { ErrorNotification } from './components/ErrorNotification';
-import { FilterTodo } from './components/FilterTodo/FilterTodo';
 import { FilterOption } from './types/FilterOption';
+import { Header } from './components/Header/Header';
+import { Footer } from './components/Footer/Footer';
 
 export const App: React.FC = () => {
   const [todosFromServer, setTodosFromServer] = useState<Todo[]>([]);
-  const [completedTodosId, setCompletedTodosId] = useState<number[]>([]);
   const [option, setOption] = useState(FilterOption.All);
 
   const [itemsLeft, setItemsLeft] = useState(0);
@@ -21,7 +20,6 @@ export const App: React.FC = () => {
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [savingTodoIds, setSavingTodoIds] = useState<number[]>([]);
 
-  const [newTodoTitle, setNewTodoTitle] = useState('');
   const [inputDisabled, setInputDisabled] = useState(false);
 
   const [tempTodo, setTempTodo] = useState<Todo | null>(null);
@@ -33,9 +31,6 @@ export const App: React.FC = () => {
       .getTodos()
       .then(data => {
         setTodosFromServer(data);
-        setCompletedTodosId(
-          data.filter(todo => todo.completed).map(todo => todo.id),
-        );
         setItemsLeft(data.filter(todo => !todo.completed).length);
       })
       .catch(() => setErrorMessage('Unable to load todos'));
@@ -65,12 +60,6 @@ export const App: React.FC = () => {
       setSavingTodoIds([]);
     }
   };
-
-  useEffect(() => {
-    setCompletedTodosId(
-      todosFromServer.filter(todo => todo.completed).map(todo => todo.id),
-    );
-  }, [todosFromServer]);
 
   const saveAllTodos = async () => {
     if (isSavingAll || savingTodoIds.length > 0) {
@@ -110,7 +99,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const addTodo = async (title: string) => {
+  const addTodo = async (title: string, onSuccess: () => void) => {
     setInputDisabled(true);
 
     const newTempTodo: Todo = {
@@ -133,7 +122,7 @@ export const App: React.FC = () => {
 
       setTodosFromServer(currentTodos => [...currentTodos, newTodoFromServer]);
       setItemsLeft(prev => prev + 1);
-      setNewTodoTitle('');
+      onSuccess();
     } catch (error) {
       setErrorMessage('Unable to add a todo');
     } finally {
@@ -145,57 +134,23 @@ export const App: React.FC = () => {
   const filteredTodos = useMemo(() => {
     return todosFromServer.filter(todo => {
       if (option === FilterOption.Active) {
-        return !completedTodosId.includes(todo.id);
+        return !todo.completed;
       }
 
       if (option === FilterOption.Completed) {
-        return completedTodosId.includes(todo.id);
+        return todo.completed;
       }
 
       return true;
     });
-  }, [todosFromServer, completedTodosId, option]);
-
-  const handleNewTodoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setNewTodoTitle(event.target.value);
-  };
-
-  // const handleSubmit = (event: React.FormEvent) => {
-  //   event.preventDefault();
-  //   setErrorMessage('');
-  //   if (!newTodoTitle.trim()) {
-  //     setErrorMessage('Title should not be empty');
-
-  //     return;
-  //   }
-
-  //   const tempId = Date.now();
-
-  //   const newTodo: Todo = {
-  //     id: tempId,
-  //     userId: todoServise.USER_ID,
-  //     title: newTodoTitle.trim(),
-  //     completed: false,
-  //   };
-
-  //   addTodo(newTodo);
-  // };
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    setErrorMessage('');
-
-    if (!newTodoTitle.trim()) {
-      setErrorMessage('Title should not be empty');
-
-      return;
-    }
-
-    addTodo(newTodoTitle.trim()); // передаём только title
-  };
+  }, [todosFromServer, option]);
 
   const handleClearCompleted = async () => {
     setErrorMessage('');
+    const completedTodosId = todosFromServer
+      .filter(todo => todo.completed)
+      .map(todo => todo.id);
+
     setSavingTodoIds([...completedTodosId]);
 
     try {
@@ -225,32 +180,21 @@ export const App: React.FC = () => {
     }
   };
 
+  const hasCompletedTodos = todosFromServer.some(todo => todo.completed);
+
   return (
     <div className="todoapp">
       <h1 className="todoapp__title">todos</h1>
 
       <div className="todoapp__content">
-        <header className="todoapp__header">
-          <button
-            type="button"
-            className={cn('todoapp__toggle-all', { active: itemsLeft === 0 })}
-            data-cy="ToggleAllButton"
-            onClick={saveAllTodos}
-          />
-
-          <form onSubmit={handleSubmit}>
-            <input
-              data-cy="NewTodoField"
-              type="text"
-              className="todoapp__new-todo"
-              placeholder="What needs to be done?"
-              value={newTodoTitle}
-              onChange={handleNewTodoChange}
-              disabled={inputDisabled}
-              ref={inputRef}
-            />
-          </form>
-        </header>
+        <Header
+          isAllTodosCompleted={itemsLeft === 0}
+          isInputDisabled={inputDisabled}
+          onSubmit={addTodo}
+          saveAllTodos={() => saveAllTodos}
+          setErrorMessage={setErrorMessage}
+          inputRef={inputRef}
+        />
 
         <TodoList
           listOfTodos={filteredTodos}
@@ -269,7 +213,7 @@ export const App: React.FC = () => {
               />
             </label>{' '}
             <span data-cy="TodoTitle" className="todo__title">
-              {newTodoTitle}
+              {tempTodo.title}
             </span>
             <div data-cy="TodoLoader" className="modal overlay is-active">
               <div className="modal-background has-background-white-ter" />
@@ -279,23 +223,13 @@ export const App: React.FC = () => {
         )}
 
         {todosFromServer.length > 0 && (
-          <footer className="todoapp__footer" data-cy="Footer">
-            <span className="todo-count" data-cy="TodosCounter">
-              {`${itemsLeft} items left`}
-            </span>
-
-            <FilterTodo selectedOption={option} onSelect={setOption} />
-
-            <button
-              type="button"
-              className="todoapp__clear-completed"
-              data-cy="ClearCompletedButton"
-              disabled={completedTodosId.length < 1}
-              onClick={handleClearCompleted}
-            >
-              Clear completed
-            </button>
-          </footer>
+          <Footer
+            itemsLeft={itemsLeft}
+            option={option}
+            setOption={setOption}
+            handleClearCompleted={handleClearCompleted}
+            isClearButtonDisabled={!hasCompletedTodos}
+          />
         )}
       </div>
 
