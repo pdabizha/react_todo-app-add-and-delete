@@ -19,6 +19,7 @@ export const TodoList: React.FC<Props> = ({
 }) => {
   const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
   const [value, setValue] = useState('');
+  const [isDisabled, setIsDisabled] = useState(false);
 
   const handleTodoEdit = (todo: Todo) => {
     setEditingTodoId(todo.id);
@@ -46,14 +47,16 @@ export const TodoList: React.FC<Props> = ({
     todo: Todo,
   ) => {
     if (event.key === 'Enter') {
-      if (!value) {
+      setIsDisabled(true);
+      if (value === '') {
         onDelete(todo.id);
 
         return;
       }
 
-      onUpdate({ ...todo, title: value });
+      onUpdate({ ...todo, title: value.trim() });
       setEditingTodoId(null);
+      setIsDisabled(false);
     }
   };
 
@@ -93,7 +96,7 @@ export const TodoList: React.FC<Props> = ({
             </label>
 
             {editingTodoId === todo.id ? (
-              <form>
+              <form onSubmit={e => e.preventDefault()}>
                 <input
                   data-cy="TodoTitleField"
                   type="text"
@@ -103,6 +106,7 @@ export const TodoList: React.FC<Props> = ({
                   onChange={handleChange}
                   onKeyDown={event => handleKeyDown(event, todo)}
                   onBlur={handleBlur}
+                  disabled={isDisabled}
                   autoFocus
                 />
               </form>
